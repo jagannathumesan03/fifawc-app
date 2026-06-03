@@ -1,171 +1,166 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Alert } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ThemedView, useTheme } from '../../../src/components/ThemedView'
-import { MatchCard } from '../../../src/components/MatchCard'
 import { useRoomStore } from '../../../src/stores/roomStore'
 import { useBracketStore } from '../../../src/stores/bracketStore'
-import { useSettingsStore } from '../../../src/stores/settingsStore'
-import { useSSE } from '../../../src/hooks/useSSE'
-import { createApiClient } from '../../../src/api/client'
-import type { Room, ConsensusBracket } from '../../../src/types/contract'
+import type { Member } from '../../../src/types/contract'
 
-export default function RoomDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+export default function RoomLobbyScreen() {
   const theme = useTheme()
   const router = useRouter()
-  const { rooms, submitBracket, consensusByRoomId, setConsensus } = useRoomStore()
-  const { exportSnapshot } = useBracketStore()
-  const { serverUrl, deviceId } = useSettingsStore()
+  const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>()
+  const id = Array.isArray(rawId) ? rawId[0] : rawId
+  const { rooms, adminTokenByRoomId, startRoom, submitBracket, loadMemberBrackets, memberBracketsByRoomId } = useRoomStore()
+  const { exportSnapshot, isComplete } = useBracketStore()
+  const [starting, setStarting] = useState(false)
 
-  const [room, setRoom] = useState<Room | null>(rooms.find(r => r.id === id) ?? null)
-  const [submitting, setSubmitting] = useState(false)
+  const room = rooms.find(r => r.id === id)
+  const isHost = !!adminTokenByRoomId[id]
+  const memberBrackets = memberBracketsByRoomId[id] ?? []
+  const bracketComplete = isComplete()
 
-  const consensus: ConsensusBracket | null = consensusByRoomId[id] ?? null
-  const me = room?.members.find(m => m.id === deviceId)
-  const isAdmin = room?.adminId === deviceId
-
-  // Refresh room from server
   useEffect(() => {
-    if (!serverUrl || !id) return
-    const api = createApiClient(serverUrl, deviceId)
-    api.getRoom(id).then(setRoom).catch(() => {})
-    api.getConsensus(id).then(c => setConsensus(id, c)).catch(() => {})
-  }, [id, serverUrl])
+    if (room?.status === 'active') loadMemberBrackets(id)
+  }, [room?.status])
 
-  // SSE keeps consensus in the store up-to-date automatically
-  useSSE(id)
-
-  async function handleSubmit() {
-    if (!id) return
-    setSubmitting(true)
+  async function handleStart() {
+    setStarting(true)
     try {
-      const snapshot = exportSnapshot()
-      await submitBracket(id, snapshot)
-      Alert.alert('Submitted!', 'Your bracket has been shared with the room.')
-      if (serverUrl) {
-        const updated = await createApiClient(serverUrl, deviceId).getRoom(id)
-        setRoom(updated)
-      }
-    } catch {
-      Alert.alert('Error', 'Could not submit. Check your connection.')
+      await startRoom(id)
+      await submitBracket(id, exportSnapshot())
+    } catch (e) {
+      Alert.alert('Failed to start', String(e))
     } finally {
-      setSubmitting(false)
+      setStarting(false)
     }
   }
 
-  if (!room) {
+  async function handleSubmit() {
+    try {
+      await submitBracket(id, exportSnapshot())
+      Alert.alert('Bracket submitted!', 'Your picks are locked in.')
+    } catch (e) {
+      Alert.alert('Submit failed', String(e))
+    }
+  }
+
+  if (!room) return null
+
+  const isLobby = room.status === 'lobby'
+  const isActive = room.status === 'active'
+
+  function renderMember({ item }: { item: Member }) {
+    const hasBracket = memberBrackets.some(mb => mb.memberId === item.id)
     return (
-      <ThemedView style={styles.container}>
-        <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={[styles.back, { color: theme.accent }]}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.text }]}>Room</Text>
-          <View style={{ width: 64 }} />
+      <TouchableOpacity
+        style={[styles.memberRow, { borderBottomColor: theme.border }]}
+        onPress={() => hasBracket && router.push(`/(tabs)/rooms/${id}/compare?memberId=${item.id}`)}
+        disabled={!hasBracket}
+      >
+        <View style={[styles.memberAvatar, { backgroundColor: theme.surface }]}>
+          <Text style={styles.avatarText}>{item.displayName.slice(0, 1).toUpperCase()}</Text>
         </View>
-        <Text style={[styles.empty, { color: theme.subtext }]}>Loading room…</Text>
-      </ThemedView>
+        <View style={styles.memberInfo}>
+          <Text style={[styles.memberName, { color: theme.text }]}>{item.displayName}</Text>
+          {isActive && (
+            <Text style={[styles.memberStatus, { color: hasBracket ? theme.accent : theme.subtext }]}>
+              {hasBracket ? 'Bracket submitted ✓' : 'Waiting…'}
+            </Text>
+          )}
+          {isLobby && (
+            <Text style={[styles.memberStatus, { color: theme.accent }]}>In lobby ●</Text>
+          )}
+        </View>
+        {hasBracket && <Text style={[styles.viewPicks, { color: theme.accent }]}>View picks ›</Text>}
+      </TouchableOpacity>
     )
   }
 
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={{ width: 64 }}>
-          <Text style={[styles.back, { color: theme.accent }]}>← Back</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.topBtn}>
+          <Text style={[styles.topBtnText, { color: theme.accent }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>{room.name}</Text>
-        <TouchableOpacity
-          style={[styles.submitBtn, { backgroundColor: theme.accent, opacity: (submitting || !!me?.hasSubmitted) ? 0.5 : 1 }]}
-          disabled={submitting || !!me?.hasSubmitted}
-          onPress={handleSubmit}>
-          <Text style={styles.submitBtnText}>{me?.hasSubmitted ? 'Submitted' : 'Submit'}</Text>
-        </TouchableOpacity>
+        <Text style={[styles.title, { color: theme.text }]}>Room {room.code}</Text>
+        <View style={styles.topBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Room code */}
-        <View style={[styles.codeRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text style={[styles.codeLabel, { color: theme.subtext }]}>Code</Text>
-          <Text style={[styles.code, { color: theme.text }]}>{room.code}</Text>
+      {isLobby && (
+        <View style={[styles.codeBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.codeLabel, { color: theme.subtext }]}>ROOM CODE</Text>
+          <Text style={[styles.codeValue, { color: theme.accent }]}>{room.code}</Text>
+          <Text style={[styles.codeSub, { color: theme.subtext }]}>Share with friends to join</Text>
         </View>
+      )}
 
-        {/* Members */}
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>
-          Members ({room.members.length})
-        </Text>
-        <View style={styles.members}>
-          {room.members.map(m => (
-            <View key={m.id} style={[styles.memberChip, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.memberDot, { color: m.hasSubmitted ? '#16a34a' : theme.subtext }]}>
-                {m.hasSubmitted ? '✓' : '○'}
-              </Text>
-              <Text style={[styles.memberName, { color: theme.text }]}>{m.displayName}</Text>
-              {isAdmin && m.id !== deviceId && (
-                <Text style={[styles.adminTag, { color: theme.subtext }]}>admin</Text>
-              )}
-            </View>
-          ))}
-        </View>
+      <Text style={[styles.sectionLabel, { color: theme.subtext }]}>PLAYERS ({room.members.length})</Text>
 
-        {/* Consensus */}
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Consensus Bracket</Text>
-        {!consensus || consensus.matches.length === 0 ? (
-          <Text style={[styles.empty, { color: theme.subtext }]}>
-            Waiting for members to submit brackets…
-          </Text>
-        ) : (
-          consensus.matches
-            .filter((m: ConsensusBracket['matches'][number]) => !m.skipped)
-            .map((m: ConsensusBracket['matches'][number]) => (
-              <MatchCard key={m.id} match={m} mode="consensus" />
-            ))
+      <FlatList
+        data={room.members}
+        keyExtractor={m => m.id}
+        renderItem={renderMember}
+        style={{ flex: 1 }}
+      />
+
+      <View style={[styles.footer, { borderTopColor: theme.border }]}>
+        {isLobby && isHost && (
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: theme.accent, opacity: starting ? 0.6 : 1 }]}
+            onPress={handleStart}
+            disabled={starting}
+          >
+            <Text style={styles.primaryBtnText}>{starting ? 'Starting…' : 'Start Bracket →'}</Text>
+          </TouchableOpacity>
         )}
-      </ScrollView>
+        {isLobby && !isHost && (
+          <View style={[styles.waitingBox, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.waitingText, { color: theme.subtext }]}>Waiting for host to start…</Text>
+          </View>
+        )}
+        {isActive && bracketComplete && (
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: theme.accent }]}
+            onPress={handleSubmit}
+          >
+            <Text style={styles.primaryBtnText}>Submit My Bracket</Text>
+          </TouchableOpacity>
+        )}
+        {isActive && !bracketComplete && (
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: theme.accent }]}
+            onPress={() => router.push('/(tabs)/simulate/standings')}
+          >
+            <Text style={styles.primaryBtnText}>Make My Picks →</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </ThemedView>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 56,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  back: { fontSize: 15 },
-  title: { fontSize: 17, fontWeight: '700', flex: 1, textAlign: 'center' },
-  submitBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
-  submitBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  content: { padding: 16, gap: 12 },
-  codeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  codeLabel: { fontSize: 12, fontWeight: '600' },
-  code: { fontSize: 15, fontWeight: '800', letterSpacing: 1 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', marginTop: 4 },
-  members: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  memberChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  memberDot: { fontSize: 12 },
-  memberName: { fontSize: 13, fontWeight: '600' },
-  adminTag: { fontSize: 10 },
-  empty: { textAlign: 'center', marginTop: 20, fontSize: 13 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
+  topBtn: { width: 64 },
+  topBtnText: { fontSize: 15 },
+  title: { fontSize: 17, fontWeight: '700' },
+  codeBox: { margin: 16, padding: 20, borderRadius: 14, borderWidth: 1, alignItems: 'center' },
+  codeLabel: { fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  codeValue: { fontSize: 36, fontWeight: '900', letterSpacing: 8, marginVertical: 4 },
+  codeSub: { fontSize: 11 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, paddingHorizontal: 16, paddingVertical: 8 },
+  memberRow: { flexDirection: 'row', alignItems: 'center', padding: 14, paddingHorizontal: 16, borderBottomWidth: 1, gap: 12 },
+  memberAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 16, fontWeight: '700' },
+  memberInfo: { flex: 1 },
+  memberName: { fontSize: 14, fontWeight: '600' },
+  memberStatus: { fontSize: 11, marginTop: 2 },
+  viewPicks: { fontSize: 12 },
+  footer: { padding: 16, borderTopWidth: 1 },
+  primaryBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  waitingBox: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  waitingText: { fontSize: 14 },
 })
