@@ -42,13 +42,14 @@ export default function RoomsScreen() {
 
   async function handleCreate() {
     if (!roomName.trim() || !displayName.trim()) return Alert.alert('Fields required', 'Enter a room name and your display name.')
+    if (!deviceId) return Alert.alert('Not ready', 'App is still loading. Try again in a moment.')
     setLoading(true)
     try {
       const room = await createRoom(roomName.trim(), displayName.trim())
       setSheet('none')
       router.push(`/(tabs)/rooms/${room.id}`)
-    } catch {
-      Alert.alert('Error', 'Could not create room. Check your server URL in Profile.')
+    } catch (e) {
+      Alert.alert('Error', `Could not create room: ${String(e)}`)
     } finally {
       setLoading(false)
     }

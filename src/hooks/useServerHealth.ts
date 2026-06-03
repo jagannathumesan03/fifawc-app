@@ -4,18 +4,21 @@ import { useSettingsStore } from '../stores/settingsStore'
 export type ServerStatus = 'checking' | 'connected' | 'disconnected'
 
 export function useServerHealth(intervalMs = 15000): ServerStatus {
-  const { serverUrl } = useSettingsStore()
+  const { serverUrl, ready } = useSettingsStore()
   const [status, setStatus] = useState<ServerStatus>('checking')
 
   const check = useCallback(async () => {
-    if (!serverUrl) { setStatus('disconnected'); return }
+    if (!ready || !serverUrl) { setStatus('disconnected'); return }
     try {
-      const res = await fetch(`${serverUrl.replace(/\/$/, '')}/api/health`, { signal: AbortSignal.timeout(4000) })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 4000)
+      const res = await fetch(`${serverUrl.replace(/\/$/, '')}/api/health`, { signal: controller.signal })
+      clearTimeout(timeout)
       setStatus(res.ok ? 'connected' : 'disconnected')
     } catch {
       setStatus('disconnected')
     }
-  }, [serverUrl])
+  }, [serverUrl, ready])
 
   useEffect(() => {
     check()
