@@ -30,6 +30,9 @@ export type BracketSnapshot = {
   exportedAt: string
   stage: Stage
   matches: Match[]
+  lockedGroups: string[]
+  completedAt: string | null
+  signedKey: string | null
   metadata?: {
     label?: string
     authorId?: string
@@ -44,27 +47,16 @@ export type Member = {
   submittedAt: string | null
 }
 
+export type RoomStatus = 'lobby' | 'active' | 'complete'
+
 export type Room = {
   id: string
   code: string
   name: string
   adminId: string
+  status: RoomStatus
   members: Member[]
-  forcedMatchId: string | null
   createdAt: string
-}
-
-export type ConsensusMatch = Match & {
-  voteHome: number
-  voteAway: number
-  totalVotes: number
-  skipped: boolean
-}
-
-export type ConsensusBracket = {
-  roomId: string
-  computedAt: string
-  matches: ConsensusMatch[]
 }
 
 export function isValidSnapshot(data: unknown): data is BracketSnapshot {
