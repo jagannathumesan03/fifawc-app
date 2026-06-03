@@ -1,38 +1,21 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
 import { useRouter } from 'expo-router'
-import * as DocumentPicker from 'expo-document-picker'
 import { ThemedView, useTheme } from '../../../src/components/ThemedView'
 import { useBracketStore } from '../../../src/stores/bracketStore'
-import { isValidSnapshot } from '../../../src/types/contract'
 
 export default function HomeScreen() {
   const theme = useTheme()
   const router = useRouter()
-  const { initBracket, importSnapshot } = useBracketStore()
+  const { initBracket } = useBracketStore()
 
   function handleStart() {
     initBracket()
-    router.push('/(tabs)/simulate/groups')
-  }
-
-  async function handleImport() {
-    const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' })
-    if (result.canceled) return
-    try {
-      const response = await fetch(result.assets[0].uri)
-      const text = await response.text()
-      const data = JSON.parse(text)
-      if (isValidSnapshot(data)) {
-        importSnapshot(data)
-        router.push('/(tabs)/simulate/bracket')
-      }
-    } catch { /* invalid json or fetch error */ }
+    router.push('/(tabs)/simulate/standings')
   }
 
   const actions = [
-    { icon: '▶️', title: 'Start Simulation', subtitle: 'Build your bracket from scratch', onPress: handleStart },
-    { icon: '🚪', title: 'Join a Room', subtitle: 'Enter code or scan QR', onPress: () => router.push('/(tabs)/rooms') },
-    { icon: '📥', title: 'Import Bracket', subtitle: 'Load a saved JSON', onPress: handleImport },
+    { icon: '▶️', title: 'Start Bracket', subtitle: 'Predict group seeds & knockout picks', onPress: handleStart },
+    { icon: '🚪', title: 'Join a Room', subtitle: 'Enter code or scan QR to compete with friends', onPress: () => router.push('/(tabs)/rooms') },
   ]
 
   return (

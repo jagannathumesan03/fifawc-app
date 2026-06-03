@@ -43,7 +43,7 @@ export default function RoomsScreen() {
     if (!roomName.trim() || !displayName.trim()) return Alert.alert('Fields required', 'Enter a room name and your display name.')
     setLoading(true)
     try {
-      const { room } = await createRoom(roomName.trim(), displayName.trim())
+      const room = await createRoom(roomName.trim(), displayName.trim())
       setSheet('none')
       router.push(`/(tabs)/rooms/${room.id}`)
     } catch {
