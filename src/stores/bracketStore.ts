@@ -19,7 +19,7 @@ function slotOf(id: string): number {
   return m ? parseInt(m[1], 10) : 0
 }
 
-function buildR32Matches(groupOrder: Record<string, string[]>, groupMatches: Match[]): Match[] {
+export function buildR32Matches(groupOrder: Record<string, string[]>): Match[] {
   const r32: Match[] = []
   let idx = 0
 
@@ -36,16 +36,16 @@ function buildR32Matches(groupOrder: Record<string, string[]>, groupMatches: Mat
     r32.push({ id: `r32-${idx++}`, stage: 'r32', homeTeamId: first2, awayTeamId: second1, winnerId: null, ...matchXg(tf2.rating, ts1.rating), completed: false })
   }
 
+  // Best 8 third-placers by FIFA ranking (proxy for points tiebreaker in prediction mode)
   const thirds = GROUP_LETTERS
     .map(g => {
       const teamId = groupOrder[g]?.[2]
       const team: Team | undefined = teamId ? TEAMS.find(t => t.id === teamId) : undefined
       if (!team || !teamId) return null
-      const wins = groupMatches.filter(m => m.stage === 'group' && m.completed && m.winnerId === teamId).length
-      return { teamId, team, wins }
+      return { teamId, team }
     })
-    .filter((x): x is { teamId: string; team: Team; wins: number } => x !== null)
-    .sort((a, b) => b.wins - a.wins || b.team.rating - a.team.rating)
+    .filter((x): x is { teamId: string; team: Team } => x !== null)
+    .sort((a, b) => a.team.fifaRanking - b.team.fifaRanking)
     .slice(0, 8)
 
   for (let i = 0; i < 4; i++) {
@@ -85,7 +85,6 @@ function buildThirdPlace(sfMatches: Match[]): Match | null {
   return { id: 'third-0', stage: 'third', homeTeamId, awayTeamId, winnerId: null, ...xg, completed: false }
 }
 
-// Rebuilds all knockout rounds from R32 onwards, preserving already-completed matches.
 function propagateWinners(current: Match[]): Match[] {
   const byId = new Map(current.map(m => [m.id, m]))
   const groups = current.filter(m => m.stage === 'group')
@@ -123,46 +122,54 @@ function generateUUID(): string {
   })
 }
 
-function poissonGoals(xg: number): number {
-  const L = Math.exp(-xg)
-  let k = 0, p = 1
-  do { k++; p *= Math.random() } while (p > L)
-  return k - 1
-}
-
 type BracketStore = {
   matches: Match[]
-  savedSnapshots: { id: string; label: string; snapshot: BracketSnapshot }[]
-  pendingSyncMatchIds: string[]
   groupOrder: Record<string, string[]>
+  lockedGroups: string[]
+  savedSnapshots: { id: string; label: string; snapshot: BracketSnapshot }[]
   initBracket(): void
+  setGroupOrder(group: string, order: string[]): void
+  lockGroup(group: string): void
+  allGroupsLocked(): boolean
   setWinner(matchId: string, winnerId: string): void
-  autoSimulate(): void
+  isComplete(): boolean
   exportSnapshot(): BracketSnapshot
   importSnapshot(snapshot: BracketSnapshot): void
   saveSnapshot(label: string): void
   loadSnapshot(id: string): void
   loadSavedSnapshots(): void
-  setGroupOrder(group: string, order: string[]): void
 }
 
 export const useBracketStore = create<BracketStore>((set, get) => ({
   matches: [],
-  savedSnapshots: [],
-  pendingSyncMatchIds: [],
   groupOrder: defaultGroupOrder(),
+  lockedGroups: [],
+  savedSnapshots: [],
 
   initBracket() {
-    set({ matches: getGroupMatches(), pendingSyncMatchIds: [], groupOrder: defaultGroupOrder() })
+    set({ matches: getGroupMatches(), groupOrder: defaultGroupOrder(), lockedGroups: [] })
   },
 
   setGroupOrder(group, order) {
+    if (get().lockedGroups.includes(group)) return
+    set(state => ({ groupOrder: { ...state.groupOrder, [group]: order } }))
+  },
+
+  lockGroup(group) {
     set(state => {
-      const newGroupOrder = { ...state.groupOrder, [group]: order }
-      const groupMatches = state.matches.filter(m => m.stage === 'group')
-      const r32 = buildR32Matches(newGroupOrder, groupMatches)
-      return { groupOrder: newGroupOrder, matches: propagateWinners([...groupMatches, ...r32]) }
+      if (state.lockedGroups.includes(group)) return state
+      const lockedGroups = [...state.lockedGroups, group]
+      const allLocked = lockedGroups.length === GROUP_LETTERS.length
+      if (!allLocked) return { lockedGroups }
+      // All groups locked — generate full bracket
+      const r32 = buildR32Matches(state.groupOrder)
+      const matches = propagateWinners([...state.matches.filter(m => m.stage === 'group'), ...r32])
+      return { lockedGroups, matches }
     })
+  },
+
+  allGroupsLocked() {
+    return get().lockedGroups.length === GROUP_LETTERS.length
   },
 
   setWinner(matchId, winnerId) {
@@ -170,33 +177,19 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
       const updated = state.matches.map(m =>
         m.id === matchId ? { ...m, winnerId, completed: true } : m
       )
-      return {
-        matches: propagateWinners(updated),
-        pendingSyncMatchIds: [...new Set([...state.pendingSyncMatchIds, matchId])],
-      }
+      return { matches: propagateWinners(updated) }
     })
   },
 
-  autoSimulate() {
-    set(state => {
-      const simulated = state.matches.map(m => {
-        if (m.stage !== 'group' || m.completed || !m.homeTeamId || !m.awayTeamId || !m.xgHome || !m.xgAway) return m
-        const homeGoals = poissonGoals(m.xgHome)
-        const awayGoals = poissonGoals(m.xgAway)
-        const winnerId = homeGoals >= awayGoals ? m.homeTeamId : m.awayTeamId
-        return { ...m, winnerId, completed: true }
-      })
-      const r32 = buildR32Matches(state.groupOrder, simulated)
-      const withR32 = [...simulated.filter(m => m.stage === 'group'), ...r32]
-      return {
-        matches: propagateWinners(withR32),
-        pendingSyncMatchIds: state.matches.filter(m => !m.completed && m.stage === 'group').map(m => m.id),
-      }
-    })
+  isComplete() {
+    const { matches, allGroupsLocked } = get()
+    if (!allGroupsLocked()) return false
+    const final = matches.find(m => m.stage === 'final')
+    return final?.completed === true
   },
 
   exportSnapshot(): BracketSnapshot {
-    const { matches } = get()
+    const { matches, lockedGroups } = get()
     const stages = ['group','r32','r16','qf','sf','third','final'] as const
     const latestStage = stages.reduce((acc, s) =>
       matches.some(m => m.stage === s && m.completed) ? s : acc, 'group' as BracketSnapshot['stage'])
@@ -205,17 +198,17 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
       exportedAt: new Date().toISOString(),
       stage: latestStage,
       matches,
+      lockedGroups,
+      completedAt: get().isComplete() ? new Date().toISOString() : null,
+      signedKey: null,
     }
   },
 
   importSnapshot(snapshot) {
-    set(state => ({
-      matches: state.matches.map(local => {
-        const incoming = snapshot.matches.find(m => m.id === local.id)
-        if (incoming?.completed) return incoming
-        return local
-      })
-    }))
+    set({
+      matches: snapshot.matches,
+      lockedGroups: snapshot.lockedGroups ?? [],
+    })
   },
 
   saveSnapshot(label) {
