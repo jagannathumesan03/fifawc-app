@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { useRouter } from 'expo-router'
 import { ThemedView, useTheme } from '../../../src/components/ThemedView'
 import { useBracketStore } from '../../../src/stores/bracketStore'
+import { ServerBanner } from '../../../src/components/ServerBanner'
 
 export default function HomeScreen() {
   const theme = useTheme()
@@ -26,6 +27,7 @@ export default function HomeScreen() {
         <Text style={styles.heroTitle}>2026 Simulator</Text>
         <Text style={styles.heroHosts}>USA · Canada · Mexico</Text>
       </View>
+      <ServerBanner />
       <ScrollView contentContainerStyle={styles.actions}>
         {actions.map(a => (
           <TouchableOpacity key={a.title} onPress={a.onPress}

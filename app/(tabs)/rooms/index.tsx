@@ -8,6 +8,7 @@ import { ThemedView, useTheme } from '../../../src/components/ThemedView'
 import { useRoomStore } from '../../../src/stores/roomStore'
 import { useSettingsStore } from '../../../src/stores/settingsStore'
 import type { Room } from '../../../src/types/contract'
+import { ServerBanner } from '../../../src/components/ServerBanner'
 
 type Sheet = 'none' | 'join' | 'create'
 
@@ -83,6 +84,7 @@ export default function RoomsScreen() {
         <Text style={[styles.title, { color: theme.text }]}>Rooms</Text>
       </View>
 
+      <ServerBanner />
       <View style={[styles.toolbar, { borderBottomColor: theme.border }]}>
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: theme.accent }]}
