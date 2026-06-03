@@ -36,7 +36,7 @@ export function buildR32Matches(groupOrder: Record<string, string[]>): Match[] {
     r32.push({ id: `r32-${idx++}`, stage: 'r32', homeTeamId: first2, awayTeamId: second1, winnerId: null, ...matchXg(tf2.rating, ts1.rating), completed: false })
   }
 
-  // Best 8 third-placers by FIFA ranking (proxy for points tiebreaker in prediction mode)
+  // Best 8 third-placers: sorted by FIFA ranking (static seeding for prediction mode — no match results to tally)
   const thirds = GROUP_LETTERS
     .map(g => {
       const teamId = groupOrder[g]?.[2]
@@ -189,7 +189,8 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
   },
 
   exportSnapshot(): BracketSnapshot {
-    const { matches, lockedGroups } = get()
+    const state = get()
+    const { matches, lockedGroups } = state
     const stages = ['group','r32','r16','qf','sf','third','final'] as const
     const latestStage = stages.reduce((acc, s) =>
       matches.some(m => m.stage === s && m.completed) ? s : acc, 'group' as BracketSnapshot['stage'])
@@ -199,7 +200,7 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
       stage: latestStage,
       matches,
       lockedGroups,
-      completedAt: get().isComplete() ? new Date().toISOString() : null,
+      completedAt: state.isComplete() ? new Date().toISOString() : null,
       signedKey: null,
     }
   },
