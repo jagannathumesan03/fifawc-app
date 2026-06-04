@@ -61,7 +61,7 @@ export default function GroupSeedingScreen() {
     loadMemberProgress(activeRoomId)
     const id = setInterval(() => loadMemberProgress(activeRoomId), 10000)
     return () => clearInterval(id)
-  }, [activeRoomId])
+  }, [activeRoomId, loadMemberProgress])
 
   const pan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => !isLocked,
@@ -106,6 +106,7 @@ export default function GroupSeedingScreen() {
     ? (memberProgressByRoomId[activeRoomId] ?? []).filter(
         mb => mb.snapshot.lockedGroups.includes(activeGroup)
       ).map(mb => ({
+        memberId: mb.memberId,
         displayName: mb.displayName,
         teamIds: mb.snapshot.groupOrder[activeGroup] ?? [],
       }))
@@ -221,11 +222,11 @@ export default function GroupSeedingScreen() {
         {friendGroupPicks.length > 0 && (
           <View style={styles.friendSection}>
             <Text style={[styles.friendLabel, { color: theme.subtext }]}>FRIENDS' PICKS</Text>
-            {friendGroupPicks.map((fp, i) => {
+            {friendGroupPicks.map((fp) => {
               const myOrder = groupOrder[activeGroup] ?? []
               const matches = fp.teamIds.length === myOrder.length && fp.teamIds.every((id, idx) => id === myOrder[idx])
               return (
-                <View key={i} style={[styles.friendChip, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View key={fp.memberId} style={[styles.friendChip, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <Text style={[styles.friendName, { color: theme.text }]}>{fp.displayName}</Text>
                   <View style={styles.friendFlags}>
                     {fp.teamIds.map(id => (
