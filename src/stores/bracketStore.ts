@@ -190,7 +190,7 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
 
   exportSnapshot(): BracketSnapshot {
     const state = get()
-    const { matches, lockedGroups } = state
+    const { matches, lockedGroups, groupOrder } = state
     const stages = ['group','r32','r16','qf','sf','third','final'] as const
     const latestStage = stages.reduce((acc, s) =>
       matches.some(m => m.stage === s && m.completed) ? s : acc, 'group' as BracketSnapshot['stage'])
@@ -200,6 +200,7 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
       stage: latestStage,
       matches,
       lockedGroups,
+      groupOrder,
       completedAt: state.isComplete() ? new Date().toISOString() : null,
       signedKey: null,
     }

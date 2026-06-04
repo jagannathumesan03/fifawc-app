@@ -31,6 +31,7 @@ export type BracketSnapshot = {
   stage: Stage
   matches: Match[]
   lockedGroups: string[]
+  groupOrder: Record<string, string[]>
   completedAt: string | null
   signedKey: string | null
   metadata?: {
