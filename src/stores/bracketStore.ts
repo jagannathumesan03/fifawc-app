@@ -3,6 +3,17 @@ import { db } from '../db/database'
 import { getGroupMatches, TEAMS } from '../data/tournamentSeeds'
 import type { Match, BracketSnapshot, Team, Stage } from '../types/contract'
 
+let _progressTimer: ReturnType<typeof setTimeout> | null = null
+
+function schedulePush(getSnapshot: () => BracketSnapshot) {
+  if (_progressTimer) clearTimeout(_progressTimer)
+  _progressTimer = setTimeout(() => {
+    const { rooms, pushProgress } = (require('./roomStore') as { useRoomStore: { getState(): { rooms: import('../types/contract').Room[]; pushProgress(roomId: string, snapshot: BracketSnapshot): Promise<void> } } }).useRoomStore.getState()
+    const activeRoom = rooms.find((r: import('../types/contract').Room) => r.status === 'active')
+    if (activeRoom) pushProgress(activeRoom.id, getSnapshot())
+  }, 500)
+}
+
 const GROUP_LETTERS = 'ABCDEFGHIJKL'.split('')
 const GROUP_PAIRS: [string, string][] = [['A','B'],['C','D'],['E','F'],['G','H'],['I','J'],['K','L']]
 
@@ -166,6 +177,7 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
       const matches = propagateWinners([...state.matches.filter(m => m.stage === 'group'), ...r32])
       return { lockedGroups, matches }
     })
+    schedulePush(() => get().exportSnapshot())
   },
 
   allGroupsLocked() {
@@ -179,6 +191,7 @@ export const useBracketStore = create<BracketStore>((set, get) => ({
       )
       return { matches: propagateWinners(updated) }
     })
+    schedulePush(() => get().exportSnapshot())
   },
 
   isComplete() {
