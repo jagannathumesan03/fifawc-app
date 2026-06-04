@@ -69,6 +69,8 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
     const adminToken = get().adminTokenByRoomId[roomId]
     if (!adminToken) throw new Error('Not the host')
     const { room } = await api().startRoom(roomId, adminToken)
+    db.runSync('INSERT OR REPLACE INTO rooms_cache (id, data, updated_at) VALUES (?,?,?)',
+      room.id, JSON.stringify(room), new Date().toISOString())
     set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? room : r) }))
   },
 
