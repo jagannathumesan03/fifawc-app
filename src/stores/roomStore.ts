@@ -88,8 +88,10 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   },
 
   async loadMemberProgress(roomId) {
-    const progress = await api().getMemberProgress(roomId)
-    set(s => ({ memberProgressByRoomId: { ...s.memberProgressByRoomId, [roomId]: progress } }))
+    try {
+      const progress = await api().getMemberProgress(roomId)
+      set(s => ({ memberProgressByRoomId: { ...s.memberProgressByRoomId, [roomId]: progress } }))
+    } catch { /* ignore network errors */ }
   },
 
   async exportBracket(roomId, snapshot) {

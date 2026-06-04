@@ -8,9 +8,11 @@ let _progressTimer: ReturnType<typeof setTimeout> | null = null
 function schedulePush(getSnapshot: () => BracketSnapshot) {
   if (_progressTimer) clearTimeout(_progressTimer)
   _progressTimer = setTimeout(() => {
-    const { rooms, pushProgress } = (require('./roomStore') as { useRoomStore: { getState(): { rooms: import('../types/contract').Room[]; pushProgress(roomId: string, snapshot: BracketSnapshot): Promise<void> } } }).useRoomStore.getState()
-    const activeRoom = rooms.find((r: import('../types/contract').Room) => r.status === 'active')
-    if (activeRoom) pushProgress(activeRoom.id, getSnapshot())
+    try {
+      const { rooms, pushProgress } = (require('./roomStore') as { useRoomStore: { getState(): { rooms: import('../types/contract').Room[]; pushProgress(roomId: string, snapshot: BracketSnapshot): Promise<void> } } }).useRoomStore.getState()
+      const activeRoom = rooms.find((r: import('../types/contract').Room) => r.status === 'active')
+      if (activeRoom) pushProgress(activeRoom.id, getSnapshot())
+    } catch { /* store not ready */ }
   }, 500)
 }
 

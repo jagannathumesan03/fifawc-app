@@ -49,7 +49,7 @@ export function createApiClient(baseUrl: string, deviceId: string) {
 
     getMemberProgress: (roomId: string) =>
       request<{ memberId: string; displayName: string; snapshot: BracketSnapshot }[]>(
-        `/api/rooms/${roomId}/progress`
+        `/api/rooms/${roomId}/progress?deviceId=${encodeURIComponent(deviceId)}`
       ),
 
     getMemberBrackets: (roomId: string) =>
