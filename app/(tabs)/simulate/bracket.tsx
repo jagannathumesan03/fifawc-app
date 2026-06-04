@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
 import { useRouter } from 'expo-router'
 import { ThemedView, useTheme } from '../../../src/components/ThemedView'
@@ -26,11 +26,26 @@ export default function BracketScreen() {
   const theme = useTheme()
   const router = useRouter()
   const { matches, setWinner, isComplete } = useBracketStore()
-  const { memberBracketsByRoomId } = useRoomStore()
+  const { memberBracketsByRoomId, memberProgressByRoomId, loadMemberProgress, rooms } = useRoomStore()
   const [activeStage, setActiveStage] = useState<Stage>('r32')
 
+  const activeRoomId = rooms.find(r => r.status === 'active')?.id ?? null
+
+  useEffect(() => {
+    if (!activeRoomId) return
+    loadMemberProgress(activeRoomId).catch(() => {})
+    const id = setInterval(() => loadMemberProgress(activeRoomId).catch(() => {}), 10000)
+    return () => clearInterval(id)
+  }, [activeRoomId])
+
   const stageMatches = matches.filter(m => m.stage === activeStage)
-  const allMemberBrackets = Object.values(memberBracketsByRoomId).flat()
+  const progressEntries = activeRoomId ? (memberProgressByRoomId[activeRoomId] ?? []) : []
+  const finalEntries = activeRoomId ? (memberBracketsByRoomId[activeRoomId] ?? []) : []
+  const finalMemberIds = new Set(finalEntries.map(e => e.memberId))
+  const allMemberBrackets = [
+    ...progressEntries.filter(e => !finalMemberIds.has(e.memberId)),
+    ...finalEntries,
+  ]
 
   function getFriendPicks(match: Match) {
     return allMemberBrackets
