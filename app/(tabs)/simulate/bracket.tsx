@@ -33,8 +33,8 @@ export default function BracketScreen() {
 
   useEffect(() => {
     if (!activeRoomId) return
-    loadMemberProgress(activeRoomId).catch(() => {})
-    const id = setInterval(() => loadMemberProgress(activeRoomId).catch(() => {}), 10000)
+    loadMemberProgress(activeRoomId)
+    const id = setInterval(() => loadMemberProgress(activeRoomId), 10000)
     return () => clearInterval(id)
   }, [activeRoomId])
 
