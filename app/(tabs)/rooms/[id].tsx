@@ -11,7 +11,7 @@ export default function RoomLobbyScreen() {
   const router = useRouter()
   const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>()
   const id = Array.isArray(rawId) ? rawId[0] : rawId
-  const { rooms, adminTokenByRoomId, startRoom, submitBracket, loadMemberBrackets, memberBracketsByRoomId } = useRoomStore()
+  const { rooms, adminTokenByRoomId, startRoom, submitBracket, loadMemberBrackets, memberBracketsByRoomId, refreshRoom } = useRoomStore()
   const { exportSnapshot, isComplete } = useBracketStore()
   const [starting, setStarting] = useState(false)
 
@@ -24,11 +24,20 @@ export default function RoomLobbyScreen() {
     if (room?.status === 'active') loadMemberBrackets(id)
   }, [room?.status])
 
+  useEffect(() => {
+    if (!id) return
+    const INTERVAL = room?.status === 'lobby' ? 4000 : 8000
+    const timer = setInterval(() => {
+      refreshRoom(id).catch(() => {})
+      if (room?.status === 'active') loadMemberBrackets(id).catch(() => {})
+    }, INTERVAL)
+    return () => clearInterval(timer)
+  }, [id, room?.status])
+
   async function handleStart() {
     setStarting(true)
     try {
       await startRoom(id)
-      await submitBracket(id, exportSnapshot())
     } catch (e) {
       Alert.alert('Failed to start', String(e))
     } finally {
