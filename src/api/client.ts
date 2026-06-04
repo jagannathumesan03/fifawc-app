@@ -42,6 +42,16 @@ export function createApiClient(baseUrl: string, deviceId: string) {
         method: 'POST', body: JSON.stringify({ snapshot, deviceId }),
       }),
 
+    postProgress: (roomId: string, snapshot: BracketSnapshot) =>
+      request<void>(`/api/rooms/${roomId}/progress`, {
+        method: 'POST', body: JSON.stringify({ snapshot, deviceId }),
+      }),
+
+    getMemberProgress: (roomId: string) =>
+      request<{ memberId: string; displayName: string; snapshot: BracketSnapshot }[]>(
+        `/api/rooms/${roomId}/progress`
+      ),
+
     getMemberBrackets: (roomId: string) =>
       request<{ memberId: string; displayName: string; snapshot: BracketSnapshot }[]>(
         `/api/rooms/${roomId}/brackets`
