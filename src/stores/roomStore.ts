@@ -10,12 +10,16 @@ type RoomStore = {
   rooms: Room[]
   adminTokenByRoomId: Record<string, string>
   memberBracketsByRoomId: Record<string, MemberBracket[]>
+  memberProgressByRoomId: Record<string, MemberBracket[]>
   loadRooms(): void
+  refreshRoom(roomId: string): Promise<void>
   createRoom(name: string, displayName: string): Promise<Room>
   joinRoom(code: string, displayName: string): Promise<Room>
   startRoom(roomId: string): Promise<void>
   submitBracket(roomId: string, snapshot: BracketSnapshot): Promise<void>
   loadMemberBrackets(roomId: string): Promise<void>
+  pushProgress(roomId: string, snapshot: BracketSnapshot): Promise<void>
+  loadMemberProgress(roomId: string): Promise<void>
   exportBracket(roomId: string, snapshot: BracketSnapshot): Promise<{ imageUrl: string; signedKey: string }>
 }
 
@@ -28,10 +32,18 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   rooms: [],
   adminTokenByRoomId: {},
   memberBracketsByRoomId: {},
+  memberProgressByRoomId: {},
 
   loadRooms() {
     const rows = db.getAllSync<{ data: string }>('SELECT data FROM rooms_cache ORDER BY updated_at DESC')
     set({ rooms: rows.map(r => JSON.parse(r.data)) })
+  },
+
+  async refreshRoom(roomId) {
+    const room = await api().getRoom(roomId)
+    db.runSync('INSERT OR REPLACE INTO rooms_cache (id, data, updated_at) VALUES (?,?,?)',
+      room.id, JSON.stringify(room), new Date().toISOString())
+    set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? room : r) }))
   },
 
   async createRoom(name, displayName) {
@@ -67,6 +79,17 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   async loadMemberBrackets(roomId) {
     const brackets = await api().getMemberBrackets(roomId)
     set(s => ({ memberBracketsByRoomId: { ...s.memberBracketsByRoomId, [roomId]: brackets } }))
+  },
+
+  async pushProgress(roomId, snapshot) {
+    try {
+      await api().postProgress(roomId, snapshot)
+    } catch { /* fire-and-forget */ }
+  },
+
+  async loadMemberProgress(roomId) {
+    const progress = await api().getMemberProgress(roomId)
+    set(s => ({ memberProgressByRoomId: { ...s.memberProgressByRoomId, [roomId]: progress } }))
   },
 
   async exportBracket(roomId, snapshot) {
