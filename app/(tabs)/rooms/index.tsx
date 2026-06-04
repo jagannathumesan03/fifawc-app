@@ -19,7 +19,7 @@ export default function RoomsScreen() {
   const { deviceId, displayName: savedName } = useSettingsStore()
 
   const [sheet, setSheet] = useState<Sheet>('none')
-  const [code, setCode] = useState('WC2026-')
+  const [code, setCode] = useState('')
   const [displayName, setDisplayName] = useState(savedName)
   const [roomName, setRoomName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -94,7 +94,7 @@ export default function RoomsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.accent }]}
-          onPress={() => { setCode('WC2026-'); setDisplayName(savedName); setSheet('join') }}>
+          onPress={() => { setCode(''); setDisplayName(savedName); setSheet('join') }}>
           <Text style={[styles.btnText, { color: theme.accent }]}>Join Room</Text>
         </TouchableOpacity>
       </View>
@@ -121,7 +121,7 @@ export default function RoomsScreen() {
               value={code}
               onChangeText={setCode}
               autoCapitalize="characters"
-              placeholder="WC2026-XXXX"
+              placeholder="Enter 4-letter code (e.g. NCKX)"
               placeholderTextColor={theme.subtext}
             />
 
